@@ -32,6 +32,12 @@ if (NALU_USES_OPENFAST)
 
 endif (NALU_USES_OPENFAST)
 
+find_library(MASA_LIBRARY NAMES libmasa.a PATHS ${MASA_DIR}/lib )
+if (MASA_LIBRARY)
+   find_path(MASA_INCLUDES masa.h PATHS ${MASA_DIR}/include )
+   include_directories(${MASA_INCLUDES}/..)
+endif (MASA_LIBRARY)
+
 # This needs to be cleaned up
 find_library(YAML_LIBRARY NAMES libyaml-cpp.a PATHS ${YAML_DIR}/lib )
 find_path(YAML_INCLUDES yaml.h PATHS ${YAML_DIR}/include/yaml-cpp )
@@ -113,6 +119,11 @@ target_link_libraries(nalu ${YAML_LIBRARY})
 if (NALU_USES_OPENFAST)
    target_link_libraries(nalu ${OpenFAST_LIBRARIES} ${OpenFAST_CPP_LIBRARIES})
 endif (NALU_USES_OPENFAST)
+
+if (MASA_LIBRARY)
+  target_link_libraries(nalu ${MASA_LIBRARY})
+  add_definitions("-DNALU_USES_MASA")
+endif (MASA_LIBRARY)
 
 file (GLOB UNIT_TESTS_SOURCES unit_tests/*.C unit_tests/*/*.C)
 

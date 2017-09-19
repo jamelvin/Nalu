@@ -1,0 +1,15 @@
+# Cleanup old cache before we configure
+# Note:  This does not remove files produced by make.  Use "make clean" for this.
+find . -name "CMakeFiles" -exec rm -rf {} \;
+rm -f CMakeCache.txt
+
+#-DMASA_DIR:PATH=/workspace/jmelvin/install/jMASA \
+#
+cmake \
+  -DTrilinos_DIR:PATH=/workspace/jmelvin/install/trilinos_debug \
+  -DYAML_DIR:PATH=`spack location -i yaml-cpp %gcc@6.1.0` \
+  -DCMAKE_BUILD_TYPE=DEBUG \
+  -DCMAKE_CXX_FLAGS_DEBUG='-std=c++11 -g -O0' \
+  -DCMAKE_C_FLAGS_DEBUG='-std=c++11 -g -O0' \
+$EXTRA_ARGS \
+../

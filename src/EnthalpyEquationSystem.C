@@ -73,6 +73,11 @@
 #include <user_functions/VariableDensityNonIsoTemperatureAuxFunction.h>
 #include <user_functions/VariableDensityNonIsoEnthalpySrcNodeSuppAlg.h>
 
+#if defined (NALU_USES_MASA)
+#include <masa/AuxFunctionAlgorithmMasaTemperature.h>
+#include <masa/MasaEnthalpySrcNodeSuppAlg.h>
+#endif //NALU_USES_MASA
+
 // overset
 #include <overset/UpdateOversetFringeAlgorithmDriver.h>
 
@@ -476,6 +481,11 @@ EnthalpyEquationSystem::register_interior_algorithm(
         else if (sourceName == "VariableDensityNonIso" ) {
           suppAlg = new VariableDensityNonIsoEnthalpySrcNodeSuppAlg(realm_);
         }
+#if defined (NALU_USES_MASA)
+        else if (sourceName == "Masa" ) {
+          suppAlg = new MasaEnthalpySrcNodeSuppAlg(realm_);
+        }
+#endif
         else if (sourceName == "abl_forcing") {
           ThrowAssertMsg(
             ((NULL != realm_.ablForcingAlg_) &&
@@ -932,6 +942,10 @@ EnthalpyEquationSystem::register_initial_condition_fcn(
   const std::map<std::string, std::string> &theNames,
   const std::map<std::string, std::vector<double> > &/*theParams*/)
 {
+  // create the algorithm
+  bool MasaAux = false;
+  AuxFunctionAlgorithm *auxAlg;
+
   // iterate map and check for name
   const std::string dofName = "temperature";
   std::map<std::string, std::string>::const_iterator iterName
@@ -942,15 +956,23 @@ EnthalpyEquationSystem::register_initial_condition_fcn(
     if ( fcnName == "VariableDensityNonIso" ) {
       theAuxFunc = new VariableDensityNonIsoTemperatureAuxFunction();      
     }
+#if defined (NALU_USES_MASA)
+    else if ( fcnName == "Masa" ) {
+      auxAlg = new AuxFunctionAlgorithmMasaTemperature(realm_, part,
+                                                       temperature_, NULL,
+                                                       stk::topology::NODE_RANK);
+      MasaAux = true;
+    }
+#endif
     else {
       throw std::runtime_error("EnthalpyEquationSystem::register_initial_condition_fcn: limited user functions supported");
     }
     
     // create the algorithm
-    AuxFunctionAlgorithm *auxAlg
-      = new AuxFunctionAlgorithm(realm_, part,
-				 temperature_, theAuxFunc,
-				 stk::topology::NODE_RANK);
+    if (!MasaAux)
+      auxAlg = new AuxFunctionAlgorithm(realm_, part,
+                                        temperature_, theAuxFunc,
+                                        stk::topology::NODE_RANK);
     
     // push to ic
     realm_.initCondAlg_.push_back(auxAlg);
@@ -1243,6 +1265,10 @@ EnthalpyEquationSystem::temperature_bc_setup(
   // extract temperature as possibly external; similar to interface
   const bool externalData = userData.externalData_;
 
+  // create the algorithm
+  bool MasaAux = false;
+  AuxFunctionAlgorithm *auxTempAlg;
+
   // populate temperature_bc
   AuxFunction *theAuxFunc = NULL;
   if ( CONSTANT_UD == theDataType ) {
@@ -1261,6 +1287,14 @@ EnthalpyEquationSystem::temperature_bc_setup(
     else if ( fcnName == "VariableDensityNonIso" ) {
       theAuxFunc = new VariableDensityNonIsoTemperatureAuxFunction();
     }
+#if defined (NALU_USES_MASA)
+    else if ( fcnName == "Masa" ) {
+      auxTempAlg = new AuxFunctionAlgorithmMasaTemperature(realm_, part,
+                                                           temperature_, NULL,
+                                                           stk::topology::NODE_RANK);
+      MasaAux = true;
+    }
+#endif
     else {
       throw std::runtime_error("EnthalpyEquationSystem::temperature_bc_setup; limited user functions supported");
     }
@@ -1268,12 +1302,12 @@ EnthalpyEquationSystem::temperature_bc_setup(
   else {
     throw std::runtime_error("EnthalpyEquationSystem::temperature_bc_setup: only function and constants supported (and none specified)");   
   }
-  
-  AuxFunctionAlgorithm *auxTempAlg
-    = new AuxFunctionAlgorithm(realm_, part,
-                               temperatureBc, theAuxFunc,
-                               stk::topology::NODE_RANK);
 
+  if (!MasaAux)
+     auxTempAlg = new AuxFunctionAlgorithm(realm_, part,
+                                           temperatureBc, theAuxFunc,
+                                           stk::topology::NODE_RANK);
+  
   // copy bc value to temperature
   CopyFieldAlgorithm *theTempCopyAlg = NULL;
   if ( copyBCVal ) {

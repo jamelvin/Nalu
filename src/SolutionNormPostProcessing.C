@@ -45,6 +45,12 @@
 #include <fstream>
 #include <iomanip>
 
+#if defined (NALU_USES_MASA)
+#include <masa/AuxFunctionAlgorithmMasaVelocity.h>
+#include <masa/AuxFunctionAlgorithmMasaGradPressure.h>
+#include <masa/AuxFunctionAlgorithmMasaTemperature.h>
+#endif //NALU_USES_MASA
+
 namespace sierra{
 namespace nalu{
 
@@ -218,6 +224,11 @@ SolutionNormPostProcessing::analytical_function_factory(
   stk::mesh::Part *part)
 {
   AuxFunction *theAuxFunc = NULL;
+  AuxFunctionAlgorithm *auxAlg;
+
+  // Flag for Masa algorithm as it is handled differently
+  bool MasaAux = false;
+
   // switch on the name found...
   if ( functionName == "steady_2d_thermal" ) {
     theAuxFunc = new SteadyThermalContactAuxFunction();
@@ -264,6 +275,28 @@ SolutionNormPostProcessing::analytical_function_factory(
   else if ( functionName == "wind_energy_taylor_vortex_dpdx" ) {
     theAuxFunc = new WindEnergyTaylorVortexPressureGradAuxFunction(0,realm_.meta_data().spatial_dimension(), std::vector<double>());
   }
+#if defined (NALU_USES_MASA)
+  else if ( functionName == "MasaVelocity" ) {
+    auxAlg = new AuxFunctionAlgorithmMasaVelocity(realm_, part,
+                                                  exactDofField, NULL,
+                                                  stk::topology::NODE_RANK);
+    MasaAux = true;
+
+  }
+  else if ( functionName == "MasaGradPressure" ) {
+    auxAlg = new AuxFunctionAlgorithmMasaGradPressure(realm_, part,
+                                                      exactDofField, NULL,
+                                                      stk::topology::NODE_RANK);
+    MasaAux = true;
+  }
+  else if ( functionName == "MasaTemperature" ) {
+    auxAlg = new AuxFunctionAlgorithmMasaTemperature(realm_, part,
+                                                     exactDofField, NULL,
+                                                     stk::topology::NODE_RANK);
+    MasaAux = true;
+
+  }
+#endif
   else {
     throw std::runtime_error(
       "SolutionNormPostProcessing::setup: Only "
@@ -276,10 +309,10 @@ SolutionNormPostProcessing::analytical_function_factory(
   }
 
   // create the aux function
-  AuxFunctionAlgorithm *auxAlg
-    = new AuxFunctionAlgorithm(realm_, part,
-                               exactDofField, theAuxFunc,
-                               stk::topology::NODE_RANK);
+  if ( !MasaAux )
+    auxAlg = new AuxFunctionAlgorithm(realm_, part,
+                                 exactDofField, theAuxFunc,
+                                 stk::topology::NODE_RANK);
 
   // push back
   populateExactNodalFieldAlg_.push_back(auxAlg);

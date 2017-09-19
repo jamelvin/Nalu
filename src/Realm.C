@@ -138,6 +138,10 @@
 // catalyst visualization output
 #include <Iovs_DatabaseIO.h>
 
+#if defined (NALU_USES_MASA)
+#include <masa/MasaInterface.h>
+#endif
+
 #define USE_NALU_PERFORMANCE_TESTING_CALLGRIND 0
 #if USE_NALU_PERFORMANCE_TESTING_CALLGRIND
 #include "/usr/netpub/valgrind-3.8.1/include/valgrind/callgrind.h"
@@ -239,6 +243,9 @@ namespace nalu{
     doPromotion_(false),
     promotionOrder_(0u),
     inputMeshIdx_(-1),
+#if defined (NALU_USES_MASA)
+    masaInterface_(*this),
+#endif
     node_(node)
 {
   // deal with specialty options that live off of the realm; 
@@ -485,6 +492,11 @@ Realm::initialize()
 
   // variables that may come from the initial mesh
   input_variables_from_mesh();
+
+#if defined (NALU_USES_MASA)
+  // initalize Masa : must be done before boundary conditions
+  masaInterface_.initialize(*this);
+#endif
 
   populate_boundary_data();
 
@@ -738,6 +750,10 @@ Realm::load(const YAML::Node & node)
     equationSystems_.load(node);
   }
 
+#if defined (NALU_USES_MASA)
+  masaInterface_.load(node);
+#endif
+
   // set number of nodes, check job run size
   check_job(true);
 
@@ -804,6 +820,11 @@ Realm::setup_nodal_fields()
   // loop over all material props targets and register nodal fields
   std::vector<std::string> targetNames = get_physics_target_names();
   equationSystems_.register_nodal_fields(targetNames);
+
+#if defined (NALU_USES_MASA)
+  masaInterface_.register_nodal_fields(*this, targetNames);
+#endif
+
 }
 
 //--------------------------------------------------------------------------

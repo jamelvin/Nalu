@@ -154,6 +154,17 @@
 #include <user_functions/KovasznayVelocityAuxFunction.h>
 #include <user_functions/KovasznayPressureAuxFunction.h>
 
+#if defined (NALU_USES_MASA)
+#include <masa/AuxFunctionAlgorithmMasaVelocity.h>
+#include <masa/AuxFunctionAlgorithmMasaPressure.h>
+#include <masa/MasaInterface.h>
+#include <masa/MasaMomentumSrcNodeSuppAlg.h>
+#include <masa/MasaMomentumSrcElemSuppAlg.h>
+#include <masa/MasaContinuitySrcElemSuppAlg.h>
+#include <masa/MasaContinuitySrcNodeSuppAlg.h>
+#include <masa/MasaEnthalpySrcNodeSuppAlg.h>
+#endif //NALU_USES_MASA
+
 #include <overset/UpdateOversetFringeAlgorithmDriver.h>
 
 // deprecated
@@ -506,6 +517,9 @@ LowMachEquationSystem::register_initial_condition_fcn(
   stk::mesh::MetaData & meta_data = realm_.meta_data();
   const int nDim = meta_data.spatial_dimension();
 
+  // use to flag Masa as it is handled differently
+  bool MasaAux = false;
+
   // iterate map and check for name
   const std::string dofName = "velocity";
   std::map<std::string, std::string>::const_iterator iterName
@@ -554,6 +568,14 @@ LowMachEquationSystem::register_initial_condition_fcn(
     else if ( fcnName == "SteadyTaylorVortex" ) {
       theAuxFunc = new SteadyTaylorVortexVelocityAuxFunction(0,nDim);
     }
+#if defined (NALU_USES_MASA)
+    else if ( fcnName == "Masa" ) {
+      auxAlg = new AuxFunctionAlgorithmMasaVelocity(realm_, part,
+                                            velocityNp1, NULL,
+                                            stk::topology::NODE_RANK);
+      MasaAux = true;
+    }
+#endif
     else if ( fcnName == "VariableDensity" ) {      
       theAuxFunc = new VariableDensityVelocityAuxFunction(0,nDim);
     }
@@ -574,9 +596,10 @@ LowMachEquationSystem::register_initial_condition_fcn(
     }
 
     // create the algorithm
-    auxAlg = new AuxFunctionAlgorithm(realm_, part,
-                                      velocityNp1, theAuxFunc,
-                                      stk::topology::NODE_RANK);
+    if ( !MasaAux )
+      auxAlg = new AuxFunctionAlgorithm(realm_, part,
+                                        velocityNp1, theAuxFunc,
+                                        stk::topology::NODE_RANK);
     
     // push to ic
     realm_.initCondAlg_.push_back(auxAlg);
@@ -1101,6 +1124,11 @@ MomentumEquationSystem::register_interior_algorithm(
           else if (sourceName == "SteadyTaylorVortex" ) {
             suppAlg = new SteadyTaylorVortexMomentumSrcElemSuppAlg(realm_);
           }
+#if defined (NALU_USES_MASA)
+          else if (sourceName == "Masa" ) {
+            suppAlg = new MasaMomentumSrcElemSuppAlg(realm_);
+          }
+#endif
           else if (sourceName == "VariableDensity" ) {
             suppAlg = new VariableDensityMomentumSrcElemSuppAlg(realm_);
           }
@@ -1300,6 +1328,11 @@ MomentumEquationSystem::register_interior_algorithm(
           else if (sourceName == "SteadyTaylorVortex" ) {
             suppAlg = new SteadyTaylorVortexMomentumSrcNodeSuppAlg(realm_);
           }
+#if defined (NALU_USES_MASA)
+          else if (sourceName == "Masa" ) {
+            suppAlg = new MasaMomentumSrcNodeSuppAlg(realm_);
+          }
+#endif
           else if (sourceName == "VariableDensity" ) {
             suppAlg = new VariableDensityMomentumSrcNodeSuppAlg(realm_);
           }
@@ -1384,6 +1417,10 @@ MomentumEquationSystem::register_inflow_bc(
   // algorithm type
   const AlgorithmType algType = INFLOW;
 
+  // bc data alg
+  bool MasaAux = false 
+  AuxFunctionAlgorithm *auxAlg;
+
   // velocity np1
   VectorFieldType &velocityNp1 = velocity_->field_of_state(stk::mesh::StateNP1);
   GenericFieldType &dudxNone = dudx_->field_of_state(stk::mesh::StateNone);
@@ -1426,6 +1463,15 @@ MomentumEquationSystem::register_inflow_bc(
     else if ( fcnName == "SteadyTaylorVortex" ) {
       theAuxFunc = new SteadyTaylorVortexVelocityAuxFunction(0,nDim);
     }
+#if defined (NALU_USES_MASA)
+    else if ( fcnName == "Masa" ) {
+      // Don't need an AuxFucntion as it is directly placed in this class
+      auxAlg = new AuxFunctionAlgorithmMasaVelocity(realm_, part,
+                                                    theBcField, NULL,
+                                                    stk::topology::NODE_RANK);
+      MasaAux = true;
+    }
+#endif
     else if ( fcnName == "VariableDensity" ) {
       theAuxFunc = new VariableDensityVelocityAuxFunction(0,nDim);
     }
@@ -1442,13 +1488,12 @@ MomentumEquationSystem::register_inflow_bc(
   else {
     throw std::runtime_error("MomentumEquationSystem::register_inflow_bc: only constant and user function supported");
   }
-  
-  // bc data alg
-  AuxFunctionAlgorithm *auxAlg
-    = new AuxFunctionAlgorithm(realm_, part,
-			       theBcField, theAuxFunc,
-			       stk::topology::NODE_RANK);
-  
+
+  if ( !MasaAux )
+    auxAlg = new AuxFunctionAlgorithm(realm_, part,
+                                      theBcField, theAuxFunc,
+                                      stk::topology::NODE_RANK);
+
   // how to populate the field?
   if ( userData.externalData_ ) {
     // xfer will handle population; only need to populate the initial value
@@ -2332,6 +2377,11 @@ ContinuityEquationSystem::register_interior_algorithm(
             if (sourceName == "SteadyTaylorVortex" ) {
               suppAlg = new SteadyTaylorVortexContinuitySrcElemSuppAlg(realm_);
             }
+#if defined (NALU_USES_MASA)
+            else if ( sourceName == "Masa" ) {
+              suppAlg = new MasaContinuitySrcElemSuppAlg(realm_);
+            }
+#endif
             else if ( sourceName == "VariableDensity" ) {
               suppAlg = new VariableDensityContinuitySrcElemSuppAlg(realm_);
             }
@@ -2424,6 +2474,11 @@ ContinuityEquationSystem::register_interior_algorithm(
         else if ( sourceName == "VariableDensity" ) {
           suppAlg = new VariableDensityContinuitySrcNodeSuppAlg(realm_);
         }
+#if defined (NALU_USES_MASA)
+        else if ( sourceName == "Masa" ) {
+          suppAlg = new MasaContinuitySrcNodeSuppAlg(realm_);
+        }
+#endif
         else if ( sourceName == "VariableDensityNonIso" ) {
           suppAlg = new VariableDensityNonIsoContinuitySrcNodeSuppAlg(realm_);
         }
@@ -2455,6 +2510,10 @@ ContinuityEquationSystem::register_inflow_bc(
 
   ScalarFieldType &pressureNone = pressure_->field_of_state(stk::mesh::StateNone);
   VectorFieldType &dpdxNone = dpdx_->field_of_state(stk::mesh::StateNone);
+
+  // Aux function alg
+  bool MasaAux = false;
+  AuxFunctionAlgorithm *auxAlg;
 
   stk::mesh::MetaData &meta_data = realm_.meta_data();
   const unsigned nDim = meta_data.spatial_dimension();
@@ -2494,6 +2553,15 @@ ContinuityEquationSystem::register_inflow_bc(
     else if ( fcnName == "SteadyTaylorVortex" ) {
       theAuxFunc = new SteadyTaylorVortexVelocityAuxFunction(0,nDim);
     }
+#if defined (NALU_USES_MASA)
+    else if ( fcnName == "Masa" ) {
+      // JAM: See above for explanation
+      auxAlg = new AuxFunctionAlgorithmMasaVelocity(realm_, part,
+                                                    theBcField, NULL,
+                                                    stk::topology::NODE_RANK);
+      MasaAux = true;
+    }
+#endif
     else if ( fcnName == "VariableDensity" ) {
       theAuxFunc = new VariableDensityVelocityAuxFunction(0,nDim);
     }
@@ -2510,12 +2578,11 @@ ContinuityEquationSystem::register_inflow_bc(
   else {
     throw std::runtime_error("ContEquationSystem::register_inflow_bc: only constant and user function supported");
   }
-
-  // bc data alg
-  AuxFunctionAlgorithm *auxAlg
-    = new AuxFunctionAlgorithm(realm_, part,
-                               theBcField, theAuxFunc,
-                               stk::topology::NODE_RANK);
+  
+  if ( !MasaAux )
+    auxAlg = new AuxFunctionAlgorithm(realm_, part,
+                                      theBcField, theAuxFunc,
+                                      stk::topology::NODE_RANK);
 
   // how to populate the field?
   if ( userData.externalData_ ) {
@@ -2880,6 +2947,10 @@ ContinuityEquationSystem::register_initial_condition_fcn(
   const std::map<std::string, std::string> &theNames,
   const std::map<std::string, std::vector<double> >& theParams)
 {
+  // create the algorithm
+  AuxFunctionAlgorithm *auxAlg;
+  bool MasaAux = false;
+
   // iterate map and check for name
   const std::string dofName = "pressure";
   std::map<std::string, std::string>::const_iterator iterName
@@ -2901,6 +2972,15 @@ ContinuityEquationSystem::register_initial_condition_fcn(
       // create the function
       theAuxFunc = new SteadyTaylorVortexPressureAuxFunction();      
     }
+#if defined (NALU_USES_MASA)
+    else if ( fcnName == "Masa" ) {
+      // create the function
+      auxAlg = new AuxFunctionAlgorithmMasaPressure(realm_, part,
+                                                    pressure_, NULL,
+                                                    stk::topology::NODE_RANK);
+      MasaAux = true;
+    }
+#endif
     else if ( fcnName == "VariableDensity" ) {
       // create the function
       theAuxFunc = new VariableDensityPressureAuxFunction();      
@@ -2921,11 +3001,11 @@ ContinuityEquationSystem::register_initial_condition_fcn(
     }
     
     // create the algorithm
-    AuxFunctionAlgorithm *auxAlg
-      = new AuxFunctionAlgorithm(realm_, part,
-				 pressure_, theAuxFunc,
-				 stk::topology::NODE_RANK);
-    
+    if ( !MasaAux )
+      auxAlg = new AuxFunctionAlgorithm(realm_, part,
+                                        pressure_, theAuxFunc,
+                                        stk::topology::NODE_RANK);
+
     // push to ic
     realm_.initCondAlg_.push_back(auxAlg);
     

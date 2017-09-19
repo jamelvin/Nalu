@@ -23,6 +23,10 @@
 
 #include <stk_util/util/ParameterList.hpp>
 
+#if defined (NALU_USES_MASA)
+ #include <masa/MasaInterface.h>
+#endif
+
 // standard c++
 #include <map>
 #include <string>
@@ -575,6 +579,10 @@ class Realm {
 
   stk::mesh::PartVector allPeriodicInteractingParts_;
   stk::mesh::PartVector allNonConformalInteractingParts_;
+
+#if defined (NALU_USES_MASA)
+  MasaInterface masaInterface_;
+#endif
 };
 
 } // namespace nalu
