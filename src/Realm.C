@@ -824,7 +824,6 @@ Realm::setup_nodal_fields()
 #if defined (NALU_USES_MASA)
   masaInterface_.register_nodal_fields(*this, targetNames);
 #endif
-
 }
 
 //--------------------------------------------------------------------------

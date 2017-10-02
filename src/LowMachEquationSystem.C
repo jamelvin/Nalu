@@ -1418,7 +1418,7 @@ MomentumEquationSystem::register_inflow_bc(
   const AlgorithmType algType = INFLOW;
 
   // bc data alg
-  bool MasaAux = false 
+  bool MasaAux = false; 
   AuxFunctionAlgorithm *auxAlg;
 
   // velocity np1
